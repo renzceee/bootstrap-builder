@@ -1,0 +1,95 @@
+name: Sync Termux upstream
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-termux-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync package sources
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install sync tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync
+
+      - name: Clone official Termux packages
+        run: |
+          git clone --depth 1 --branch master https://github.com/termux/termux-packages.git /tmp/termux-packages-upstream
+
+      - name: Sync upstream package files
+        run: |
+          set -euo pipefail
+
+          upstream=/tmp/termux-packages-upstream
+
+          sync_path() {
+            local path="$1"
+            if [ -e "${upstream}/${path}" ]; then
+              rsync -a --delete "${upstream}/${path}" "${path}"
+            fi
+          }
+
+          sync_path "build-all.sh"
+          sync_path "build-package.sh"
+          sync_path "clean.sh"
+          sync_path "repo.json"
+          sync_path "disabled-packages/"
+          sync_path "ndk-patches/"
+          sync_path "packages/"
+          sync_path "root-packages/"
+          sync_path "sample/"
+          sync_path "scripts/"
+          sync_path "site/"
+          sync_path "x11-packages/"
+
+          sed -i 's/^TERMUX_APP__PACKAGE_NAME=.*/TERMUX_APP__PACKAGE_NAME="com.renzxce.servermanager"/' scripts/properties.sh
+          sed -i 's/^TERMUX_APP_PACKAGE=.*/TERMUX_APP_PACKAGE="$TERMUX_APP__PACKAGE_NAME" # Deprecated alternative variable for `TERMUX_APP__PACKAGE_NAME`/' scripts/properties.sh
+
+      - name: Commit and push changes
+        run: |
+          set -euo pipefail
+
+          git add \
+            build-all.sh \
+            build-package.sh \
+            clean.sh \
+            repo.json \
+            disabled-packages \
+            ndk-patches \
+            packages \
+            root-packages \
+            sample \
+            scripts \
+            site \
+            x11-packages
+
+          if git diff --cached --quiet; then
+            echo "No upstream changes to commit."
+            exit 0
+          fi
+
+          upstream_commit="$(git -C /tmp/termux-packages-upstream rev-parse --short HEAD)"
+          git commit -m "Sync Termux packages from upstream ${upstream_commit}"
+          git push origin HEAD:main
