@@ -23,7 +23,7 @@ TERMUX_PKG_BUILD_IN_SRC=true
 TERMUX_PKG_HAS_DEBUG=false
 TERMUX_PKG_HOSTBUILD=true
 # enable lto
-__jvm_features="link-time-opt"
+__jvm_features=""
 
 termux_step_host_build() {
 	# precompiled JDK release for GNU/Linux to use as host JDK for bootstrapping
