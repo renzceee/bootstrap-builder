@@ -3,9 +3,9 @@ TERMUX_PKG_DESCRIPTION="Ambitious Vim-fork focused on extensibility and agility 
 TERMUX_PKG_LICENSE="Apache-2.0, VIM License"
 TERMUX_PKG_LICENSE_FILE="LICENSE.txt"
 TERMUX_PKG_MAINTAINER="Joshua Kahn <tom@termux.dev>"
-TERMUX_PKG_VERSION="0.13.0~dev-952+gedb043bf33"
+TERMUX_PKG_VERSION="0.13.0~dev-960+g59dbca9b0c"
 TERMUX_PKG_SRCURL="https://github.com/neovim/neovim/archive/${TERMUX_PKG_VERSION##*+g}.tar.gz"
-TERMUX_PKG_SHA256=699045b1849c1373c839339afc2b8b188308bf4b87a2dff36ceb9bb774a031d6
+TERMUX_PKG_SHA256=66b4beb696f612628bab1b2c633619abeceb1843f9dbdf2da59918086f682ccb
 TERMUX_PKG_REPOLOGY_METADATA_VERSION="${TERMUX_PKG_VERSION%%~*}"
 TERMUX_PKG_DEPENDS="libandroid-support, libiconv, libmsgpack, libunibilium, libuv, libvterm (>= 1:0.3-0), lua51-lpeg, luajit, luv, tree-sitter, tree-sitter-parsers, utf8proc"
 TERMUX_PKG_BREAKS="neovim"
@@ -39,7 +39,7 @@ termux_pkg_auto_update() {
 			echo "https://api.github.com/repos/neovim/neovim/releases/tags/nightly"
 			echo "curl response:"
 			jq '.' <<< "$response"
-		} >&2
+		} | tee "${GITHUB_STEP_SUMMARY:-/dev/null}" >&2
 		return
 	elif [[ "${commit::10}" == "${TERMUX_PKG_VERSION##*+g}" ]]; then
 		echo "INFO: No update needed. Already at version '${TERMUX_PKG_VERSION}'."
@@ -47,6 +47,19 @@ termux_pkg_auto_update() {
 	fi
 
 	latest_nightly="$(grep --max-count=1 -oP "$TERMUX_PKG_UPDATE_VERSION_REGEXP" < <(jq -r '.body' <<< "$response"))"
+
+	if ! sed -E "${TERMUX_PKG_UPDATE_VERSION_SED_REGEXP}" <<< "${latest_nightly}"; then
+		{
+			echo "Failed to apply sed substution '${TERMUX_PKG_UPDATE_VERSION_SED_REGEXP}' to received version."
+			echo ""
+			echo "Current version: $TERMUX_PKG_VERSION"
+			echo "Fetched version: ${latest_nightly#v}"
+			echo ""
+			echo "curl response:"
+			jq '.target_commitish, .body' <<< "$response"
+		} | tee "${GITHUB_STEP_SUMMARY:-/dev/null}" >&2
+	fi
+
 	# We already filtered the version, so unset the regex to avoid reapplying it.
 	unset TERMUX_PKG_UPDATE_VERSION_REGEXP
 
